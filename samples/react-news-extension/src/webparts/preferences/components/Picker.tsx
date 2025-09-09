@@ -148,7 +148,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         size="lg"
         opened={opened}
         onClose={close}
-        title="Uppdatera preferenser"
+        title="Uppdatera preferenser2"
         centered
         overlayProps={{
           color:
