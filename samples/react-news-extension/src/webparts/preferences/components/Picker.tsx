@@ -148,7 +148,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         size="lg"
         opened={opened}
         onClose={close}
-        title="Update preferences"
+        title="Uppdatera preferenser"
         centered
         overlayProps={{
           color:
@@ -193,7 +193,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
                     variant="gradient"
                     onClick={onSavePreferences}
                   >
-                    Save
+                    Spara
                   </Button>
                 </Box>
               </Flex>
@@ -204,10 +204,10 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         {submitted && (
           <Alert
             icon={<IconCheck size="1rem" />}
-            title="Success!"
+            title="Klart!"
             color="green"
           >
-            Your preferences have been successfully updated. You&apos;re good to go!
+            Dina inställningar har sparats. Allt är redo!
           </Alert>
         )}
       </Modal>
