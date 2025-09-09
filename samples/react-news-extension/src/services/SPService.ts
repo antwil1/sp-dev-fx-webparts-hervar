@@ -7,7 +7,7 @@ import "@pnp/sp/taxonomy";
 import { ITermInfo } from "@pnp/sp/taxonomy";
 import "@pnp/sp/items/get-all";
 import "@pnp/sp/search";
-import { ISearchQuery, SearchResults } from "@pnp/sp/search";
+import { ISearchQuery, ISearchResult, SearchResults } from "@pnp/sp/search";
 
 class SPService {
   private static _sp: SPFI;
@@ -16,6 +16,7 @@ class SPService {
     this._sp = sp;
     LogHelper.info("SPService", "constructor", "PnP SP context initialised");
   }
+
   public static getListItemsAsync = async (listName: string): Promise<any> => {
     try {
       const items: any = await this._sp.web.lists
@@ -28,15 +29,10 @@ class SPService {
       return null;
     }
   };
-  public static getAllTermsByTermSet = async (
-    termSetGuid: string
-  ): Promise<any> => {
-    try {
-      // list all the terms available in this term set by term set id
-      const terms: ITermInfo[] = await this._sp.termStore.sets
-        .getById(termSetGuid)
-        .terms();
 
+  public static getAllTermsByTermSet = async (termSetGuid: string): Promise<any> => {
+    try {
+      const terms: ITermInfo[] = await this._sp.termStore.sets.getById(termSetGuid).terms();
       return terms;
     } catch (err) {
       LogHelper.error("SPService", "getAllTermsByTermSet", err);
@@ -44,40 +40,48 @@ class SPService {
     }
   };
 
+  /**
+   * @param queryTemplate  QueryTemplate för filter (innehåller managedPropertyName för filter)
+   * @param filterManagedPropertyName  MP som används i filtret (TaxID/GUID-variant)
+   * @param displayManagedPropertyName MP som ska visas (label/refiner, t.ex. RefinableStringXX)
+   */
   public static getSearchResults = async (
     queryTemplate: string,
-    managedPropertyName: string
-  ): Promise<any> => {
+    filterManagedPropertyName: string,
+    displayManagedPropertyName?: string
+  ): Promise<ISearchResult[]> => {
     try {
-      // define a search query object matching the ISearchQuery interface
-      const results2: SearchResults = await this._sp.search(<ISearchQuery>{
+      const selectProps = [
+        "Description",
+        "DocId",
+        "Author",
+        "AuthorOWSUSER",
+        "Path",
+        "NormUniqueID",
+        "PictureThumbnailURL",
+        "PromotedState",
+        "O3CSortableTitle",
+        "Title",
+        filterManagedPropertyName,           // råvärde (Label|GUID)
+      ];
+
+      if (displayManagedPropertyName) {
+        selectProps.push(displayManagedPropertyName);   // label/refiner (ren textlista)
+      }
+
+      const results: SearchResults = await this._sp.search(<ISearchQuery>{
         QueryTemplate: queryTemplate,
         Querytext: "*",
-        TrimDuplicates: false,
         RowLimit: 10,
         EnableInterleaving: true,
-        SelectProperties: [
-          "Description",
-          "DocId",
-          "Author",
-          "AuthorOWSUSER",
-          "Path",
-          "NormUniqueID",
-          "PictureThumbnailURL",
-          "PromotedState",
-          "O3CSortableTitle",
-          "Title",
-          managedPropertyName,
-        ],
+        TrimDuplicates: false,
+        SelectProperties: selectProps,
       });
 
-      console.log(results2.ElapsedTime);
-      console.log(results2.RowCount);
-      console.log(results2.PrimarySearchResults);
-      return results2.PrimarySearchResults;
+      return (results.PrimarySearchResults || []) as unknown as ISearchResult[];
     } catch (err) {
       LogHelper.error("SPService", "getSearchResults", err);
-      return null;
+      return [];
     }
   };
 }

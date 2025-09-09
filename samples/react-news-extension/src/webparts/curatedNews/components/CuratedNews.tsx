@@ -15,23 +15,20 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     extensionName,
     loginName,
     title,
-    managedPropertyName,
+    managedPropertyName, // används för FILTER i sökningen (ofta TaxID/GUID-MP)
     context,
     newsPageLink,
     enableCaching,
   } = props;
+
+  // ÄNDRA DENNA om du har en label/refiner-managed-property (t.ex. "RefinableString00")
+  const DISPLAY_PROP = "RefinableString01";
+
   const [data, setData] = React.useState<ISearchResult[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const preferenceCacheKey = `CuratedNews-UserPreferences-${loginName}`;
 
-  // const personDetails = {
-  //   displayName: "Ejaz Hussain",
-  // };
-
-  const onConfigure = () => {
-    // Context of the web part
-    context.propertyPane.open();
-  };
+  const onConfigure = () => context.propertyPane.open();
 
   const getUserPreferences = React.useCallback(async () => {
     const cachedData = CachingService.get(preferenceCacheKey);
@@ -41,16 +38,15 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     if (result && result.Tags && result.Tags.length > 0 && enableCaching) {
       CachingService.set(preferenceCacheKey, result.Tags);
     }
-    return result.Tags || [];
+    return result?.Tags || [];
   }, [preferenceCacheKey, extensionName, enableCaching]);
 
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     const tags = await getUserPreferences();
-    console.log(tags);
     const queryTemplate = composeQueryTemplate(tags);
-    const result = await SPService.getSearchResults(queryTemplate, managedPropertyName);
-    return result;
+    // Hämta båda property-namnen så vi kan visa taggarna
+    return SPService.getSearchResults(queryTemplate, managedPropertyName, DISPLAY_PROP);
   }, [getUserPreferences, managedPropertyName]);
 
   React.useEffect(() => {
@@ -90,51 +86,42 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
             <Row gutter={16}>
               {data.length > 0 &&
                 data.map((newsItem: any) => {
-                  // managedPropertyName is a string, use it as an index
-                  const raw: string | undefined = newsItem[managedPropertyName];
+                  // Hämta först display-MP (label), annars filter-MP (TaxID|GUID)
+                  const raw: string | undefined =
+                    newsItem[DISPLAY_PROP] ?? newsItem[managedPropertyName];
 
-                  // supports both "Label|GUID;Label2|GUID2" and "Label;Label2"
-                  const tags = raw
-                    ? raw.split(";").map(s => (s.includes("|") ? s.split("|")[0] : s)).filter(Boolean)
+                  // Stöd både "Label|GUID;Label2|GUID2" och "Label;Label2"
+                  const tags: string[] = raw
+                    ? raw
+                        .split(";")
+                        .map(s => (s.includes("|") ? s.split("|")[0] : s))
+                        .map(s => s.trim())
+                        .filter(Boolean)
                     : [];
+
                   return (
                     <Col key={newsItem.DocId} span={6}>
                       <Card
                         hoverable
                         bordered={false}
-                        cover={
-                          <img
-                            alt={newsItem.Title}
-                            src={newsItem.PictureThumbnailURL}
-                          />
-                        }
+                        cover={<img alt={newsItem.Title} src={newsItem.PictureThumbnailURL} />}
                         actions={[
-                          <>
-                            <Space size={[0, 8]} wrap key={newsItem.DocId}>
-                              {tags.length > 0 &&
-                                tags.map((tag, index) => {
-                                  return (
-                                    <Tag key={index} color="#108ee9">
-                                      {tag}
-                                    </Tag>
-                                  );
-                                })}
+                          // Wrappa i div (inte fragment) så AntD/SharePoint inte gömmer innehållet
+                          <div key={`tags-${newsItem.DocId}`} style={{ width: "100%" }}>
+                            <Space size={[0, 8]} wrap>
+                              {tags.map((tag) => (
+                                <Tag key={tag} color="#108ee9">{tag}</Tag>
+                              ))}
                             </Space>
-                          </>,
+                          </div>,
                         ]}
                       >
                         <Meta
-                          title={
-                            <>
-                              <span>{newsItem.Title}</span>
-                            </>
-                          }
+                          title={<span>{newsItem.Title}</span>}
                           description={
                             <>
-                              <span className={styles.description}>
-                                {newsItem.Description}
-                              </span>
-                              <div style={{ marginTop: 10 }}> </div>
+                              <span className={styles.description}>{newsItem.Description}</span>
+                              <div style={{ marginTop: 10 }} />
                             </>
                           }
                         />
@@ -151,17 +138,12 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
 
   function composeQueryTemplate(tags: ITerm[]) {
     let filterQuery = "";
-    if (!tags || tags.length === 0) {
-      filterQuery = "";
-    }
     if (Array.isArray(tags) && tags.length > 0) {
-      const taxValues = `(${tags.map((tag) => tag.id).join(" OR ")})`;
+      const taxValues = `(${tags.map((t) => t.id).join(" OR ")})`;
+      // Viktigt: filtrera på din FILTER-MP (TaxID-variant)
       filterQuery = `({|${managedPropertyName}:${taxValues}})`;
     }
-
-    const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filterQuery ? filterQuery : ""
-      } `;
-
+    const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filterQuery || ""}`;
     return queryTemplate;
   }
 };
