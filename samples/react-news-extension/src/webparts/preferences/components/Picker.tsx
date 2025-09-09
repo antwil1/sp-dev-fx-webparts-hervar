@@ -148,7 +148,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         size="lg"
         opened={opened}
         onClose={close}
-        title="Uppdatera preferenser2"
+        title="Uppdatera preferenser"
         centered
         overlayProps={{
           color:
@@ -183,7 +183,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
           </Grid.Col>
           {!submitted && (
             <Grid.Col span={12}>
-              {" "}s
+              {" "}
               <Flex gap="md" justify="flex-end">
                 <Box w={200}>
                   <Button

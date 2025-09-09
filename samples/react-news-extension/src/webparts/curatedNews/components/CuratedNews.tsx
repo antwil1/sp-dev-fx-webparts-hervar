@@ -96,7 +96,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
           <Card
             title={title}
             headStyle={{ fontSize: "2rem" }}
-            extra={<a href={newsPageLink}>See all</a>}
+            extra={<a href={newsPageLink}>Visa alla</a>}
           >
             <Row gutter={16}>
               {data.length > 0 &&
