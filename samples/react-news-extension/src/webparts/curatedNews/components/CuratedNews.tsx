@@ -44,10 +44,25 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     const tags = await getUserPreferences();
+
+    // INGA TAGGAR → visa inget
+    if (!Array.isArray(tags) || tags.length === 0) {
+      setData([]);          // töm listan
+      setLoading(false);    // stäng spinner
+      return [];            // avsluta utan sök
+    }
+
     const queryTemplate = composeQueryTemplate(tags);
-    // Hämta båda property-namnen så vi kan visa taggarna
-    return SPService.getSearchResults(queryTemplate, managedPropertyName, DISPLAY_PROP);
-  }, [getUserPreferences, managedPropertyName]);
+    // safety: om compose returnerar null
+    if (!queryTemplate) {
+      setData([]);
+      setLoading(false);
+      return [];
+    }
+
+    const result = await SPService.getSearchResults(queryTemplate, managedPropertyName, DISPLAY_PROP);
+    return result;
+  }, [getUserPreferences, managedPropertyName, DISPLAY_PROP]);
 
   React.useEffect(() => {
     let alive = true;
@@ -93,10 +108,10 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
                   // Stöd både "Label|GUID;Label2|GUID2" och "Label;Label2"
                   const tags: string[] = raw
                     ? raw
-                        .split(";")
-                        .map(s => (s.includes("|") ? s.split("|")[0] : s))
-                        .map(s => s.trim())
-                        .filter(Boolean)
+                      .split(";")
+                      .map(s => (s.includes("|") ? s.split("|")[0] : s))
+                      .map(s => s.trim())
+                      .filter(Boolean)
                     : [];
 
                   return (
@@ -137,6 +152,9 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   );
 
   function composeQueryTemplate(tags: ITerm[]) {
+    if (!Array.isArray(tags) || tags.length === 0) {
+      return null; // signalera: ingen sökning
+    }
     let filterQuery = "";
     if (Array.isArray(tags) && tags.length > 0) {
       const taxValues = `(${tags.map((t) => t.id).join(" OR ")})`;
