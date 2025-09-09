@@ -33,36 +33,37 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     context.propertyPane.open();
   };
 
-  const getUserPreferences = async () => {
+  const getUserPreferences = React.useCallback(async () => {
     const cachedData = CachingService.get(preferenceCacheKey);
-    if (cachedData !== null) {
-      return cachedData;
-    }
+    if (cachedData !== null) return cachedData;
 
     const result = await GraphService.GetPreferences(extensionName);
     if (result && result.Tags && result.Tags.length > 0 && enableCaching) {
       CachingService.set(preferenceCacheKey, result.Tags);
     }
-
     return result.Tags || [];
-  };
+  }, [preferenceCacheKey, extensionName, enableCaching]);
 
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     const tags = await getUserPreferences();
     console.log(tags);
     const queryTemplate = composeQueryTemplate(tags);
-    const result = await SPService.getSearchResults(queryTemplate);
+    const result = await SPService.getSearchResults(queryTemplate, managedPropertyName);
     return result;
-  }, []);
+  }, [getUserPreferences, managedPropertyName]);
 
   React.useEffect(() => {
-    fetchData()
-      .then((data) => {
-        setData(data);
-        setLoading(false);
-      })
-      .catch((error) => console.log(error));
+    let alive = true;
+    (async () => {
+      try {
+        const results = await fetchData();
+        if (alive) setData(results ?? []);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
   }, [fetchData]);
 
   if (!extensionName || !managedPropertyName || !newsPageLink) {
@@ -89,8 +90,12 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
             <Row gutter={16}>
               {data.length > 0 &&
                 data.map((newsItem: any) => {
-                  const tags: string[] = newsItem.O3CTax1
-                    ? newsItem.O3CTax1.split(";")
+                  // managedPropertyName is a string, use it as an index
+                  const raw: string | undefined = newsItem[managedPropertyName];
+
+                  // supports both "Label|GUID;Label2|GUID2" and "Label;Label2"
+                  const tags = raw
+                    ? raw.split(";").map(s => (s.includes("|") ? s.split("|")[0] : s)).filter(Boolean)
                     : [];
                   return (
                     <Col key={newsItem.DocId} span={6}>
@@ -154,9 +159,8 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
       filterQuery = `({|${managedPropertyName}:${taxValues}})`;
     }
 
-    const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${
-      filterQuery ? filterQuery : ""
-    } `;
+    const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filterQuery ? filterQuery : ""
+      } `;
 
     return queryTemplate;
   }

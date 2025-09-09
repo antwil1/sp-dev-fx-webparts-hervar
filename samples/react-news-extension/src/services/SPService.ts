@@ -45,17 +45,18 @@ class SPService {
   };
 
   public static getSearchResults = async (
-    queryTemplate?: string
+    queryTemplate: string,
+    managedPropertyName: string
   ): Promise<any> => {
     try {
       // define a search query object matching the ISearchQuery interface
       const results2: SearchResults = await this._sp.search(<ISearchQuery>{
         QueryTemplate: queryTemplate,
-        Querytext: "",
+        Querytext: "*",
+        TrimDuplicates: false,
         RowLimit: 10,
         EnableInterleaving: true,
         SelectProperties: [
-          "O3CTax1",
           "Description",
           "DocId",
           "Author",
@@ -66,6 +67,7 @@ class SPService {
           "PromotedState",
           "O3CSortableTitle",
           "Title",
+          managedPropertyName,
         ],
       });
 
