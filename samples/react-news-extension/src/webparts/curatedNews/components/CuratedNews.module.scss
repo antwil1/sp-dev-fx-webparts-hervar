@@ -5,6 +5,7 @@
   padding: 1em;
   color: "[theme:bodyText, default: #323130]";
   color: var(--bodyText);
+
   &.teams {
     font-family: $ms-font-family-fallbacks;
   }
@@ -12,14 +13,49 @@
 
 .news-container {
   padding: 30px;
-  //background: #ececec;
+}
 
-  .description {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.newsCard {
+  :global(.ant-card-cover) {
+    img {
+      display: block;
+      width: 100%;
+      height: 200px;       // fast höjd på bilder
+      object-fit: cover;   // croppar snyggt
+      object-position: center;
+    }
+  }
+}
+
+.description {
+  --lines: 3;   // antal rader som ska synas
+  --lh: 1.5;    // line-height
+
+  line-height: var(--lh);
+  display: -webkit-box;
+  -webkit-line-clamp: var(--lines);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: calc(var(--lines) * 1em * var(--lh));
+}
+
+/* Visa så många taggar som får plats upp till X rader */
+.tags {
+  /* hur många rader du vill visa – ändra till 2 om du vill ha två rader */
+  --rows: 2;
+
+  /* ungefärlig radhöjd för en “taggrad”. Justera vid behov (28–32px brukar stämma för AntD Tag) */
+  --tagRowHeight: 30px;
+  
+   justify-content: center;
+  /* Space är redan flex + wrap. Vi tvingar inte display här. */
+  max-height: calc(var(--rows) * var(--tagRowHeight));
+  overflow: hidden;
+
+  /* snyggare wrap utan extra “margins” från taggarna */
+  :global(.ant-tag) {
+    
   }
 }
 
@@ -36,16 +72,12 @@
   a {
     text-decoration: none;
     color: "[theme:link, default:#03787c]";
-    color: var(
-      --link
-    ); // note: CSS Custom Properties support is limited to modern browsers only
+    color: var(--link);
 
     &:hover {
       text-decoration: underline;
       color: "[theme:linkHovered, default: #014446]";
-      color: var(
-        --linkHovered
-      ); // note: CSS Custom Properties support is limited to modern browsers only
+      color: var(--linkHovered);
     }
   }
 }

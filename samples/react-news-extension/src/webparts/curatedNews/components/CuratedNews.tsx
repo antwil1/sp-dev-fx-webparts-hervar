@@ -21,9 +21,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     enableCaching,
   } = props;
 
-  // ÄNDRA DENNA om du har en label/refiner-managed-property (t.ex. "RefinableString00")
   const DISPLAY_PROP = "RefinableString01";
-
   const [data, setData] = React.useState<ISearchResult[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
   const preferenceCacheKey = `CuratedNews-UserPreferences-${loginName}`;
@@ -45,15 +43,13 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     setLoading(true);
     const tags = await getUserPreferences();
 
-    // INGA TAGGAR → visa inget
     if (!Array.isArray(tags) || tags.length === 0) {
-      setData([]);          // töm listan
-      setLoading(false);    // stäng spinner
-      return [];            // avsluta utan sök
+      setData([]);
+      setLoading(false);
+      return [];
     }
 
     const queryTemplate = composeQueryTemplate(tags);
-    // safety: om compose returnerar null
     if (!queryTemplate) {
       setData([]);
       setLoading(false);
@@ -101,29 +97,38 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
             <Row gutter={16}>
               {data.length > 0 &&
                 data.map((newsItem: any) => {
-                  // Hämta först display-MP (label), annars filter-MP (TaxID|GUID)
                   const raw: string | undefined =
                     newsItem[DISPLAY_PROP] ?? newsItem[managedPropertyName];
 
-                  // Stöd både "Label|GUID;Label2|GUID2" och "Label;Label2"
                   const tags: string[] = raw
                     ? raw
-                      .split(";")
-                      .map(s => (s.includes("|") ? s.split("|")[0] : s))
-                      .map(s => s.trim())
-                      .filter(Boolean)
+                        .split(";")
+                        .map(s => (s.includes("|") ? s.split("|")[0] : s))
+                        .map(s => s.trim())
+                        .filter(Boolean)
                     : [];
 
                   return (
                     <Col key={newsItem.DocId} span={6}>
                       <Card
+                        className={styles.newsCard}
                         hoverable
                         bordered={false}
-                        cover={<img alt={newsItem.Title} src={newsItem.PictureThumbnailURL} />}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => (window.location.href = newsItem.Path)}
+                        cover={
+                          <img
+                            alt={newsItem.Title}
+                            src={newsItem.PictureThumbnailURL}
+                          />
+                        }
                         actions={[
-                          // Wrappa i div (inte fragment) så AntD/SharePoint inte gömmer innehållet
-                          <div key={`tags-${newsItem.DocId}`} style={{ width: "100%" }}>
-                            <Space size={[0, 8]} wrap>
+                          <div
+                            key={`tags-${newsItem.DocId}`}
+                            style={{ width: "100%" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Space size={[8, 8]} wrap className={styles.tags}>
                               {tags.map((tag) => (
                                 <Tag key={tag} color="#108ee9">{tag}</Tag>
                               ))}
@@ -132,10 +137,12 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
                         ]}
                       >
                         <Meta
-                          title={<span>{newsItem.Title}</span>}
+                          title={<a href={newsItem.Path}>{newsItem.Title}</a>}
                           description={
                             <>
-                              <span className={styles.description}>{newsItem.Description}</span>
+                              <span className={styles.description}>
+                                {newsItem.Description}
+                              </span>
                               <div style={{ marginTop: 10 }} />
                             </>
                           }
@@ -153,12 +160,11 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
 
   function composeQueryTemplate(tags: ITerm[]) {
     if (!Array.isArray(tags) || tags.length === 0) {
-      return null; // signalera: ingen sökning
+      return null;
     }
     let filterQuery = "";
     if (Array.isArray(tags) && tags.length > 0) {
       const taxValues = `(${tags.map((t) => t.id).join(" OR ")})`;
-      // Viktigt: filtrera på din FILTER-MP (TaxID-variant)
       filterQuery = `({|${managedPropertyName}:${taxValues}})`;
     }
     const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filterQuery || ""}`;
