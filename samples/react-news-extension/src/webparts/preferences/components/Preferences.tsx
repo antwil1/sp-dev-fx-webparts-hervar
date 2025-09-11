@@ -31,11 +31,11 @@ const useStyles = createStyles((theme) => ({
     gap: "1rem",
   },
   tag: {
-    color: "white",
-    backgroundColor: "rgb(34, 139, 230)",
+    color: "black",
+    backgroundColor: "#EDEBE9",
     padding: "0 0.625rem",
     border: "0.0625rem solid transparent",
-    borderRadius: "2rem",
+    borderRadius: "4px",
     height: "1.75rem",
     fontSize: "0.875rem",
     lineHeight: "calc(1.625rem)",
@@ -132,6 +132,7 @@ export const Preferences: React.FC<IPreferencesProps> = (props) => {
               termsetGuid={termsetGuid}
               opened={isPanelOpen}
               close={onViewPanelDismiss}
+              loginName={loginName}
             />
           )}
 

@@ -53,9 +53,15 @@
   max-height: calc(var(--rows) * var(--tagRowHeight));
   overflow: hidden;
 
+  
+  
+
   /* snyggare wrap utan extra “margins” från taggarna */
   :global(.ant-tag) {
-    
+    background-color: #EDEBE9; // samma som din prop
+    color: #000 !important;    // 👈 tvinga svart text
+    border: none;
+    border-radius: 4px;
   }
 }
 

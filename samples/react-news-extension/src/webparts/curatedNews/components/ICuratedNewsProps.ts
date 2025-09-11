@@ -11,4 +11,6 @@ export interface ICuratedNewsProps {
   environmentMessage: string;
   hasTeamsContext: boolean;
   loginName: string;
+
+  customQueryTemplate?: string;
 }

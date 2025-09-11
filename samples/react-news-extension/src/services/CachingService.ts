@@ -8,6 +8,11 @@ class CachingService {
     LogHelper.info("CachingService", "Init", "Caching service initialised");
   }
 
+  // CachingService.ts
+  public static remove(key: string): void {
+    this._storage.removeItem(key);
+  }
+
   // Save data to local storage by key.
   public static set(key: string, data: any): void {
     this._storage.setItem(key, JSON.stringify(data));
@@ -34,5 +39,7 @@ class CachingService {
     this._storage.clear();
   }
 }
+
+
 
 export default CachingService;

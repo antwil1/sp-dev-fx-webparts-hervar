@@ -25,6 +25,7 @@ export interface ICuratedNewsWebPartProps {
   managedPropertyName: string;
   newsPageLink: string;
   enableCaching: boolean;
+  customQueryTemplate?: string;
 }
 const LOG_SOURCE: string = "CuratedNewsWebPart";
 export default class CuratedNewsWebPart extends BaseClientSideWebPart<ICuratedNewsWebPartProps> {
@@ -45,6 +46,7 @@ export default class CuratedNewsWebPart extends BaseClientSideWebPart<ICuratedNe
         environmentMessage: this._environmentMessage,
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
         loginName: this.context.pageContext.user.loginName,
+        customQueryTemplate: this.properties.customQueryTemplate,
       }
     );
 
@@ -161,6 +163,11 @@ export default class CuratedNewsWebPart extends BaseClientSideWebPart<ICuratedNe
                 PropertyPaneToggle("enableCaching", {
                   label: "Enable Caching",
                 }),
+                PropertyPaneTextField("customQueryTemplate", {
+                  label: "Query template",
+                  multiline: true,
+                  description: "Använd {FILTER} där filterdelen ska hamna. Ex: {searchTerms} (ContentTypeId:0x0101*) PromotedState=2 {FILTER}"
+                })
               ],
             },
           ],

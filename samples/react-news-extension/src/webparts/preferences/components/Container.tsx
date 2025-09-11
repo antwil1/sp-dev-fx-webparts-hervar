@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Preferences } from "./Preferences";
 import { RecoilRoot } from "recoil";
-import { Divider, MantineProvider } from "@mantine/core";
+import { MantineProvider } from "@mantine/core";
 import { WebPartContext } from "@microsoft/sp-webpart-base";
 
 export interface IContainerProps {
@@ -24,7 +24,6 @@ export const Container: React.FC<IContainerProps> = (props) => {
       withNormalizeCSS
     >
       <RecoilRoot>
-        <Divider my="xs" label="Preference" labelPosition="center" />
         <Preferences {...props} />
       </RecoilRoot>
     </MantineProvider>

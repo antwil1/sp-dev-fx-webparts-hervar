@@ -19,6 +19,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     context,
     newsPageLink,
     enableCaching,
+    customQueryTemplate,
   } = props;
 
   const DISPLAY_PROP = "RefinableString01";
@@ -40,38 +41,55 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   }, [preferenceCacheKey, extensionName, enableCaching]);
 
   const fetchData = React.useCallback(async () => {
-    setLoading(true);
+  setLoading(true);
+  try {
     const tags = await getUserPreferences();
 
+    // Inga taggar ⇒ visa inget
     if (!Array.isArray(tags) || tags.length === 0) {
       setData([]);
-      setLoading(false);
-      return [];
+      return;
     }
 
     const queryTemplate = composeQueryTemplate(tags);
     if (!queryTemplate) {
       setData([]);
-      setLoading(false);
-      return [];
+      return;
     }
 
-    const result = await SPService.getSearchResults(queryTemplate, managedPropertyName, DISPLAY_PROP);
-    return result;
-  }, [getUserPreferences, managedPropertyName, DISPLAY_PROP]);
+    const result = await SPService.getSearchResults(
+      queryTemplate,
+      managedPropertyName,
+      DISPLAY_PROP
+    );
 
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const results = await fetchData();
-        if (alive) setData(results ?? []);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, [fetchData]);
+    setData(result ?? []);
+  } catch (err) {
+    console.error("fetchData error", err);
+    setData([]); // defensivt
+  } finally {
+    setLoading(false); // 👈 stäng spinnaren ALLTID
+  }
+}, [getUserPreferences, managedPropertyName, DISPLAY_PROP]);
+
+// initial load
+React.useEffect(() => {
+  fetchData(); // ingen egen finally behövs längre
+}, [fetchData]);
+
+// lyssna på "preferencesSaved"
+React.useEffect(() => {
+  const handler = async (e: Event) => {
+    const d = (e as CustomEvent).detail || {};
+    if (d.loginName && d.loginName !== loginName) return;
+
+    CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
+    fetchData(); // fetchData hanterar själv loading/data/fel
+  };
+
+  window.addEventListener("curated:preferencesSaved", handler);
+  return () => window.removeEventListener("curated:preferencesSaved", handler);
+}, [fetchData, loginName]);
 
   if (!extensionName || !managedPropertyName || !newsPageLink) {
     return (
@@ -102,10 +120,10 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
 
                   const tags: string[] = raw
                     ? raw
-                        .split(";")
-                        .map(s => (s.includes("|") ? s.split("|")[0] : s))
-                        .map(s => s.trim())
-                        .filter(Boolean)
+                      .split(";")
+                      .map(s => (s.includes("|") ? s.split("|")[0] : s))
+                      .map(s => s.trim())
+                      .filter(Boolean)
                     : [];
 
                   return (
@@ -130,7 +148,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
                           >
                             <Space size={[8, 8]} wrap className={styles.tags}>
                               {tags.map((tag) => (
-                                <Tag key={tag} color="#108ee9">{tag}</Tag>
+                                <Tag key={tag} color="#EDEBE9">{tag}</Tag>
                               ))}
                             </Space>
                           </div>,
@@ -159,15 +177,22 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   );
 
   function composeQueryTemplate(tags: ITerm[]) {
-    if (!Array.isArray(tags) || tags.length === 0) {
-      return null;
+    // Inga taggar ⇒ ingen sökning
+    if (!Array.isArray(tags) || tags.length === 0) return null;
+
+    const taxValues = `(${tags.map(t => t.id).join(" OR ")})`;
+    const filter = `({|${managedPropertyName}:${taxValues}})`;
+
+    // Om admin har angivit en egen template i panelen
+    if (customQueryTemplate && customQueryTemplate.trim().length > 0) {
+      // Ersätt {FILTER} där admin vill ha den. Om ingen placeholder finns, append:a på slutet.
+      const tpl = customQueryTemplate.trim();
+      return tpl.includes("{FILTER}") ? tpl.replace("{FILTER}", filter) : `${tpl} ${filter}`;
     }
-    let filterQuery = "";
-    if (Array.isArray(tags) && tags.length > 0) {
-      const taxValues = `(${tags.map((t) => t.id).join(" OR ")})`;
-      filterQuery = `({|${managedPropertyName}:${taxValues}})`;
-    }
-    const queryTemplate = `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filterQuery || ""}`;
-    return queryTemplate;
+
+    // Standardtemplate (din tidigare)
+    return `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filter}`;
   }
 };
+
+

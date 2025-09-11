@@ -25,10 +25,11 @@ export interface IPickerProps {
   termsetGuid: string;
   opened: boolean;
   close: () => void;
+  loginName: string;
 }
 
 export const Picker: React.FC<IPickerProps> = (props) => {
-  const { extensionName, termsetGuid, opened, close } = props;
+  const { extensionName, termsetGuid, opened, close, loginName } = props;
   const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
   const theme = useMantineTheme();
   const [tags, setTags] = React.useState<string[]>([]);
@@ -116,12 +117,28 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         userSettings,
         extensionName
       );
+
+
+
       if (response !== null) {
         console.log(response);
         setTagList(selectedTags);
         setSubmitted(true);
       }
     }
+
+    // 1) uppdatera lokalt UI
+    setTagList(selectedTags);
+    setSubmitted(true);
+
+    // 2) rensa cache för båda webbdelsdelarna
+    CachingService.remove(`Preferences-${extensionName}-${loginName}`);
+    CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
+
+    // 3) signalera till sidan att preferenser sparats
+    window.dispatchEvent(new CustomEvent('curated:preferencesSaved', {
+      detail: { extensionName, loginName }
+    }));
 
     setLoading(false);
   };
