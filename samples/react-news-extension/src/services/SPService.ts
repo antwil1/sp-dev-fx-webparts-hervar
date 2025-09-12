@@ -9,6 +9,11 @@ import "@pnp/sp/items/get-all";
 import "@pnp/sp/search";
 import { ISearchQuery, ISearchResult, SearchResults } from "@pnp/sp/search";
 
+export interface ISearchPage {
+  items: ISearchResult[];
+  total: number;
+}
+
 class SPService {
   private static _sp: SPFI;
 
@@ -44,12 +49,16 @@ class SPService {
    * @param queryTemplate  QueryTemplate för filter (innehåller managedPropertyName för filter)
    * @param filterManagedPropertyName  MP som används i filtret (TaxID/GUID-variant)
    * @param displayManagedPropertyName MP som ska visas (label/refiner, t.ex. RefinableStringXX)
+   * @param page vilken sida som ska hämtas
+   * @param pageSize antal objekt per sida
    */
   public static getSearchResults = async (
     queryTemplate: string,
     filterManagedPropertyName: string,
-    displayManagedPropertyName?: string
-  ): Promise<ISearchResult[]> => {
+    displayManagedPropertyName?: string,
+    page: number = 1,
+    pageSize: number = 12
+  ): Promise<ISearchPage> => {
     try {
       const selectProps = [
         "Description",
@@ -62,26 +71,33 @@ class SPService {
         "PromotedState",
         "O3CSortableTitle",
         "Title",
-        filterManagedPropertyName,           // råvärde (Label|GUID)
+        filterManagedPropertyName,
       ];
 
       if (displayManagedPropertyName) {
-        selectProps.push(displayManagedPropertyName);   // label/refiner (ren textlista)
+        selectProps.push(displayManagedPropertyName);
       }
 
       const results: SearchResults = await this._sp.search(<ISearchQuery>{
         QueryTemplate: queryTemplate,
         Querytext: "*",
-        RowLimit: 10,
+        RowLimit: pageSize,
+        StartRow: (page - 1) * pageSize,
         EnableInterleaving: true,
         TrimDuplicates: false,
         SelectProperties: selectProps,
       });
 
-      return (results.PrimarySearchResults || []) as unknown as ISearchResult[];
+      const items = (results.PrimarySearchResults || []) as unknown as ISearchResult[];
+      const total =
+        (results as any)?.TotalRows ??
+        (results as any)?.RawSearchResults?.PrimaryQueryResult?.RelevantResults?.TotalRows ??
+        items.length;
+
+      return { items, total };
     } catch (err) {
       LogHelper.error("SPService", "getSearchResults", err);
-      return [];
+      return { items: [], total: 0 };
     }
   };
 }

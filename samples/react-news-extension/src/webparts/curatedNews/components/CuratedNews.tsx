@@ -1,7 +1,7 @@
 import * as React from "react";
 import styles from "./CuratedNews.module.scss";
 import { ICuratedNewsProps } from "./ICuratedNewsProps";
-import { Card, Col, Row, Space, Spin, Tag } from "antd";
+import { Card, Col, Row, Space, Spin, Tag, Pagination } from "antd";
 import Meta from "antd/lib/card/Meta";
 import SPService from "../../../services/SPService";
 import { ISearchResult } from "@pnp/sp/search";
@@ -15,7 +15,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
     extensionName,
     loginName,
     title,
-    managedPropertyName, // används för FILTER i sökningen (ofta TaxID/GUID-MP)
+    managedPropertyName,
     context,
     newsPageLink,
     enableCaching,
@@ -23,8 +23,13 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   } = props;
 
   const DISPLAY_PROP = "RefinableString01";
+  const PAGE_SIZE = 2;
+
   const [data, setData] = React.useState<ISearchResult[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [page, setPage] = React.useState(1);
+  const [total, setTotal] = React.useState(0);
+
   const preferenceCacheKey = `CuratedNews-UserPreferences-${loginName}`;
 
   const onConfigure = () => context.propertyPane.open();
@@ -41,55 +46,58 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
   }, [preferenceCacheKey, extensionName, enableCaching]);
 
   const fetchData = React.useCallback(async () => {
-  setLoading(true);
-  try {
-    const tags = await getUserPreferences();
+    setLoading(true);
+    try {
+      const tags = await getUserPreferences();
+      if (!Array.isArray(tags) || tags.length === 0) {
+        setData([]);
+        setTotal(0);
+        return;
+      }
 
-    // Inga taggar ⇒ visa inget
-    if (!Array.isArray(tags) || tags.length === 0) {
+      const queryTemplate = composeQueryTemplate(tags);
+      if (!queryTemplate) {
+        setData([]);
+        setTotal(0);
+        return;
+      }
+
+      const { items, total } = await SPService.getSearchResults(
+        queryTemplate,
+        managedPropertyName,
+        DISPLAY_PROP,
+        page,
+        PAGE_SIZE
+      );
+
+      setData(items ?? []);
+      setTotal(total ?? 0);
+    } catch (err) {
+      console.error("fetchData error", err);
       setData([]);
-      return;
+      setTotal(0);
+    } finally {
+      setLoading(false);
     }
+  }, [getUserPreferences, managedPropertyName, DISPLAY_PROP, page]);
 
-    const queryTemplate = composeQueryTemplate(tags);
-    if (!queryTemplate) {
-      setData([]);
-      return;
-    }
+  // initial load
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-    const result = await SPService.getSearchResults(
-      queryTemplate,
-      managedPropertyName,
-      DISPLAY_PROP
-    );
+  // lyssna på "preferencesSaved"
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent).detail || {};
+      if (d.loginName && d.loginName !== loginName) return;
 
-    setData(result ?? []);
-  } catch (err) {
-    console.error("fetchData error", err);
-    setData([]); // defensivt
-  } finally {
-    setLoading(false); // 👈 stäng spinnaren ALLTID
-  }
-}, [getUserPreferences, managedPropertyName, DISPLAY_PROP]);
-
-// initial load
-React.useEffect(() => {
-  fetchData(); // ingen egen finally behövs längre
-}, [fetchData]);
-
-// lyssna på "preferencesSaved"
-React.useEffect(() => {
-  const handler = async (e: Event) => {
-    const d = (e as CustomEvent).detail || {};
-    if (d.loginName && d.loginName !== loginName) return;
-
-    CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
-    fetchData(); // fetchData hanterar själv loading/data/fel
-  };
-
-  window.addEventListener("curated:preferencesSaved", handler);
-  return () => window.removeEventListener("curated:preferencesSaved", handler);
-}, [fetchData, loginName]);
+      CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
+      setPage(1); // reset to first page
+    };
+    window.addEventListener("curated:preferencesSaved", handler);
+    return () => window.removeEventListener("curated:preferencesSaved", handler);
+  }, [loginName]);
 
   if (!extensionName || !managedPropertyName || !newsPageLink) {
     return (
@@ -120,10 +128,10 @@ React.useEffect(() => {
 
                   const tags: string[] = raw
                     ? raw
-                      .split(";")
-                      .map(s => (s.includes("|") ? s.split("|")[0] : s))
-                      .map(s => s.trim())
-                      .filter(Boolean)
+                        .split(";")
+                        .map((s) => (s.includes("|") ? s.split("|")[0] : s))
+                        .map((s) => s.trim())
+                        .filter(Boolean)
                     : [];
 
                   return (
@@ -148,7 +156,9 @@ React.useEffect(() => {
                           >
                             <Space size={[8, 8]} wrap className={styles.tags}>
                               {tags.map((tag) => (
-                                <Tag key={tag} color="#EDEBE9">{tag}</Tag>
+                                <Tag key={tag} color="#EDEBE9">
+                                  {tag}
+                                </Tag>
                               ))}
                             </Space>
                           </div>,
@@ -170,6 +180,18 @@ React.useEffect(() => {
                   );
                 })}
             </Row>
+
+            {total > PAGE_SIZE && (
+              <div className={styles.pagination}>
+                <Pagination
+                  current={page}
+                  pageSize={PAGE_SIZE}
+                  total={total}
+                  showSizeChanger={false}
+                  onChange={(p) => setPage(p)}
+                />
+              </div>
+            )}
           </Card>
         </Spin>
       </div>
@@ -177,22 +199,18 @@ React.useEffect(() => {
   );
 
   function composeQueryTemplate(tags: ITerm[]) {
-    // Inga taggar ⇒ ingen sökning
     if (!Array.isArray(tags) || tags.length === 0) return null;
 
-    const taxValues = `(${tags.map(t => t.id).join(" OR ")})`;
+    const taxValues = `(${tags.map((t) => t.id).join(" OR ")})`;
     const filter = `({|${managedPropertyName}:${taxValues}})`;
 
-    // Om admin har angivit en egen template i panelen
     if (customQueryTemplate && customQueryTemplate.trim().length > 0) {
-      // Ersätt {FILTER} där admin vill ha den. Om ingen placeholder finns, append:a på slutet.
       const tpl = customQueryTemplate.trim();
-      return tpl.includes("{FILTER}") ? tpl.replace("{FILTER}", filter) : `${tpl} ${filter}`;
+      return tpl.includes("{FILTER}")
+        ? tpl.replace("{FILTER}", filter)
+        : `${tpl} ${filter}`;
     }
 
-    // Standardtemplate (din tidigare)
     return `{searchTerms} (ContentTypeId:0x0101009D1CB255DA76424F860D91F20E6C4118*) PromotedState=2 ${filter}`;
   }
 };
-
-
