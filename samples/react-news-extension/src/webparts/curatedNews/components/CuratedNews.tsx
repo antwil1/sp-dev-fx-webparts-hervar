@@ -127,7 +127,7 @@ React.useEffect(() => {
                     : [];
 
                   return (
-                    <Col key={newsItem.DocId} span={6}>
+                    <Col key={newsItem.DocId} xs={24} md={6}>
                       <Card
                         className={styles.newsCard}
                         hoverable
