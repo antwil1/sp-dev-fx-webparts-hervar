@@ -160,12 +160,22 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
       const d = (e as CustomEvent).detail || {};
       if (d.loginName && d.loginName !== loginName) return;
 
+      // rensa cache
       CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
-      setPage(1); // reset till första sidan – fetch triggas av effekten ovan
+
+      // Om vi redan är på sida 1 => hämta direkt.
+      // Annars sätt till sida 1 (vilket triggar fetch via effekten).
+      if (page === 1) {
+        fetchData();
+      } else {
+        setPage(1);
+      }
     };
+
     window.addEventListener("curated:preferencesSaved", handler);
     return () => window.removeEventListener("curated:preferencesSaved", handler);
-  }, [loginName]);
+  }, [loginName, page, fetchData]);
+
 
   if (!extensionName || !managedPropertyName || !newsPageLink) {
     return (
@@ -186,7 +196,7 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
           <Card
             title={title}
             headStyle={{ fontSize: "2rem" }}
-            //extra={<a href={newsPageLink}>Visa alla</a>}
+          //extra={<a href={newsPageLink}>Visa alla</a>}
           >
             {/* Lägg swipe på wrappern – touchAction: pan-y för att behålla vertikal scroll */}
             <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ touchAction: "pan-y" }}>
@@ -198,10 +208,10 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
 
                     const tags: string[] = raw
                       ? raw
-                          .split(";")
-                          .map((s) => (s.includes("|") ? s.split("|")[0] : s))
-                          .map((s) => s.trim())
-                          .filter(Boolean)
+                        .split(";")
+                        .map((s) => (s.includes("|") ? s.split("|")[0] : s))
+                        .map((s) => s.trim())
+                        .filter(Boolean)
                       : [];
 
                     return (
