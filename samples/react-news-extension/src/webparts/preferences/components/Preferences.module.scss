@@ -10,6 +10,17 @@
   }
 }
 
+.sectionTitle {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.2;
+  /* skala – ingen truncation på mobil */
+  font-size: clamp(1.1rem, 2.5vw, 2rem);
+  white-space: nowrap;
+}
+
+
+
 .card {
   transition: transform 150ms ease, box-shadow 150ms ease;
 

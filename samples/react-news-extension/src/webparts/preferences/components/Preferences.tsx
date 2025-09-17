@@ -1,5 +1,5 @@
 import * as React from "react";
-//import styles from "./Preferences.module.scss";
+import styles from "./Preferences.module.scss";
 import { IPreferencesProps } from "./IPreferencesProps";
 //import SPService from "../../../services/SPService";
 import {
@@ -8,7 +8,7 @@ import {
   createStyles,
   ActionIcon,
   Card,
-  Text,
+  //Text,
 } from "@mantine/core";
 
 import { IconSettings } from "@tabler/icons-react";
@@ -112,9 +112,9 @@ export const Preferences: React.FC<IPreferencesProps> = (props) => {
       <Card withBorder shadow="sm" radius="md">
         <Card.Section withBorder inheritPadding py="xs">
           <Group position="apart">
-            <Text size={30} weight={500}>
+            <h2 className={styles.sectionTitle}>
               {title}
-            </Text>
+            </h2>
             <ActionIcon
               onClick={onViewPanelClick}
               variant="outline"

@@ -194,8 +194,8 @@ export const CuratedNews: React.FC<ICuratedNewsProps> = (props) => {
       <div className={styles["news-container"]}>
         <Spin spinning={loading} tip="Loading...">
           <Card
-            title={title}
-            headStyle={{ fontSize: "2rem" }}
+            title={<h2 className={styles.sectionTitle}>{title}</h2>}
+            headStyle={{}}
           //extra={<a href={newsPageLink}>Visa alla</a>}
           >
             {/* Lägg swipe på wrappern – touchAction: pan-y för att behålla vertikal scroll */}

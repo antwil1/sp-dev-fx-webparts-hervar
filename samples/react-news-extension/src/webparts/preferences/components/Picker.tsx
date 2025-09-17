@@ -227,6 +227,8 @@ export const Picker: React.FC<IPickerProps> = (props) => {
             icon={<IconCheck size="1rem" />}
             title="Klart!"
             color="green"
+            withCloseButton
+            onClose={() => setSubmitted(false)}
           >
             Dina inställningar har sparats. Allt är redo!
           </Alert>
