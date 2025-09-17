@@ -37,54 +37,58 @@ export const Picker: React.FC<IPickerProps> = (props) => {
   const [loading, setLoading] = React.useState<boolean>(false);
   const [submitted, setSubmitted] = React.useState<boolean>(false);
 
-  const dataCacheKey = `Preferences-taxonomy-${termsetGuid}`;
 
-  const getCachedTaxonomy = async () => {
-    // Check if the taxonomy data is available in the cache.
-    const cachedTaxonomy = await CachingService.get(dataCacheKey);
-    // If the taxonomy data is available in the cache, return it.
-    if (cachedTaxonomy) {
-      return cachedTaxonomy;
-    }
+  // Code below is for caching termset
 
-    // Otherwise, make an API call to fetch the taxonomy data and cache it.
-    const taxonomy = await SPService.getAllTermsByTermSet(termsetGuid);
-    const termsResult = taxonomy.map((t: any) => {
-      const termId = t.id;
-      const termName = t.labels[0].name;
-      return { id: termId, title: termName } as ITerm;
-    });
-    // Cache the taxonomy data.
-    CachingService.set(dataCacheKey, termsResult);
+  // const dataCacheKey = `Preferences-taxonomy-${termsetGuid}`;
 
-    // Return the taxonomy data.
-    return termsResult;
-  };
+  // const getCachedTaxonomy = async () => {
+  //   // Check if the taxonomy data is available in the cache.
+  //   const cachedTaxonomy = await CachingService.get(dataCacheKey);
+  //   // If the taxonomy data is available in the cache, return it.
+  //   if (cachedTaxonomy) {
+  //     return cachedTaxonomy;
+  //   }
 
-  React.useEffect(() => {
-    async function fetchTaxonomy() {
-      const termsResult = await getCachedTaxonomy();
-      const ids = tagList.map((obj: ITerm) => obj.id);
-      setTags(ids);
-      setTermsInfo(termsResult);
-    }
-    fetchTaxonomy();
-  }, []);
+  //   // Otherwise, make an API call to fetch the taxonomy data and cache it.
+  //   const taxonomy = await SPService.getAllTermsByTermSet(termsetGuid);
+  //   const termsResult = taxonomy.map((t: any) => {
+  //     const termId = t.id;
+  //     const termName = t.labels[0].name;
+  //     return { id: termId, title: termName } as ITerm;
+  //   });
+  //   // Cache the taxonomy data.
+  //   CachingService.set(dataCacheKey, termsResult);
+
+  //   // Return the taxonomy data.
+  //   return termsResult;
+  // };
 
   // React.useEffect(() => {
   //   async function fetchTaxonomy() {
-  //     const terms = await SPService.getAllTermsByTermSet(termsetGuid);
-  //     const termsResult = terms.map((t: any) => {
-  //       const termId = t.id;
-  //       const termName = t.labels[0].name;
-  //       return { id: termId, title: termName } as ITerm;
-  //     });
+  //     const termsResult = await getCachedTaxonomy();
   //     const ids = tagList.map((obj: ITerm) => obj.id);
   //     setTags(ids);
   //     setTermsInfo(termsResult);
   //   }
   //   fetchTaxonomy();
   // }, []);
+
+  // Not caching termset
+  React.useEffect(() => {
+    async function fetchTaxonomy() {
+      const terms = await SPService.getAllTermsByTermSet(termsetGuid);
+      const termsResult = terms.map((t: any) => {
+        const termId = t.id;
+        const termName = t.labels[0].name;
+        return { id: termId, title: termName } as ITerm;
+      });
+      const ids = tagList.map((obj: ITerm) => obj.id);
+      setTags(ids);
+      setTermsInfo(termsResult);
+    }
+    fetchTaxonomy();
+  }, []);
 
   const onSavePreferences = async () => {
     setLoading(true);
