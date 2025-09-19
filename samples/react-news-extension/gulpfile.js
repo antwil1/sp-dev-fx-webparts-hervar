@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max_old_space_size=4096';
+
 const build = require('@microsoft/sp-build-web');
 
 build.addSuppression(`Warning - [sass] The local CSS class 'ms-Grid' is not camelCase and will not be type-safe.`);

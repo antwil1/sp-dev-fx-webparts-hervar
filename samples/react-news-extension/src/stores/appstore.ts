@@ -1,12 +1,11 @@
 import { atom, selector } from "recoil";
-import { ITerm } from "../webparts/preferences/types/Component.Types";
 
-export const tagsListAtom = atom({
+export const tagsListAtom = atom<string[]>({
   key: "tagList",
-  default: [] as ITerm[],
+  default: [],
 });
 
-export const tagSelectedSelector = selector({
+export const tagSelectedSelector = selector<string[]>({
   key: "tagSelected",
   get: ({ get }) => {
     const tagList = get(tagsListAtom);

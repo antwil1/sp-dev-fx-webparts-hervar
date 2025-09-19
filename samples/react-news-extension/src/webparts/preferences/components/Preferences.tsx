@@ -1,26 +1,18 @@
 import * as React from "react";
 import styles from "./Preferences.module.scss";
 import { IPreferencesProps } from "./IPreferencesProps";
-//import SPService from "../../../services/SPService";
-import {
-  Container,
-  Group,
-  createStyles,
-  ActionIcon,
-  Card,
-  //Text,
-} from "@mantine/core";
-
+import { Container, Group, createStyles, ActionIcon, Card } from "@mantine/core";
 import { IconSettings } from "@tabler/icons-react";
 import GraphService from "../../../services/GraphService";
 import { Picker } from "./Picker";
+import SPService from "../../../services/SPService";
 import { ITerm } from "../types/Component.Types";
 import { useRecoilState } from "recoil";
 import { tagsListAtom } from "../../../stores/appstore";
 import CachingService from "../../../services/CachingService";
 import { Placeholder } from "@pnp/spfx-controls-react/lib/Placeholder";
 
-const useStyles = createStyles((theme) => ({
+const useStyles = createStyles(() => ({
   tagWrapper: {
     display: "flex",
     flexDirection: "unset",
@@ -43,57 +35,55 @@ const useStyles = createStyles((theme) => ({
     transition: "background-color 100ms ease 0s",
   },
 }));
+
 export const Preferences: React.FC<IPreferencesProps> = (props) => {
-  const {
-    extensionName,
-    termsetGuid,
-    loginName,
-    title,
-    context,
-    enableCaching,
-  } = props;
+  const { extensionName, termsetGuid, loginName, title, context, enableCaching } = props;
   const { classes } = useStyles();
-  const [isPanelOpen, setIsPanelOpen] = React.useState<boolean>(false);
-  const [tagList, setTagList] = useRecoilState(tagsListAtom);
+
+  // ⬇️ Nu är listan string[] (bara ID:n)
+  const [tagList, setTagList] = useRecoilState<string[]>(tagsListAtom);
+
+  // För att slå upp titlar för visning
+  const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
+
   const dataCacheKey = `Preferences-${extensionName}-${loginName}`;
+  const termsCacheKey = `Preferences-taxonomy-${termsetGuid}`;
 
-  const onConfigure = () => {
-    // Context of the web part
-    context.propertyPane.open();
-  };
+  const onConfigure = () => context.propertyPane.open();
 
-  const getUserPreferences = async () => {
-    const cachedData = CachingService.get(dataCacheKey);
-    if (cachedData !== null) {
-      return cachedData;
-    }
+  const loadTerms = React.useCallback(async () => {
+    const cached = CachingService.get<ITerm[]>(termsCacheKey);
+    if (cached) { setTermsInfo(cached); return; }
+    const terms = await SPService.getAllTermsByTermSet(termsetGuid);
+    const mapped: ITerm[] = (terms || []).map((t: any) => ({
+      id: t.id,
+      title: t.labels?.[0]?.name ?? t.name ?? t.id,
+    }));
+    setTermsInfo(mapped);
+    CachingService.set(termsCacheKey, mapped);
+  }, [termsetGuid, termsCacheKey]);
+
+  const getUserPreferences = async (): Promise<string[]> => {
+    const cachedData = CachingService.get<string[]>(dataCacheKey);
+    if (cachedData !== null) return cachedData;
 
     const result = await GraphService.GetPreferences(extensionName);
-    if (result && result.Tags && Array.isArray(result.Tags) && enableCaching) {
-      CachingService.set(dataCacheKey, result.Tags);
-    }
-
-    return result.Tags || [];
+    const ids: string[] = (result && Array.isArray(result.Tags)) ? result.Tags : [];
+    if (enableCaching) CachingService.set(dataCacheKey, ids);
+    return ids;
   };
 
-  const getPreferences = React.useCallback(async () => {
-    const result = await getUserPreferences();
-    return result;
-  }, []);
+  const getPreferences = React.useCallback(async () => getUserPreferences(), []);
+
+  React.useEffect(() => { loadTerms(); }, [loadTerms]);
 
   React.useEffect(() => {
-    getPreferences()
-      .then((data) => setTagList(data))
-      .catch((error) => console.log(error));
+    getPreferences().then((ids) => setTagList(ids)).catch(console.log);
   }, [getPreferences]);
 
-  const onViewPanelClick = (): void => {
-    setIsPanelOpen(true);
-  };
-
-  function onViewPanelDismiss(): void {
-    setIsPanelOpen(false);
-  }
+  const [isPanelOpen, setIsPanelOpen] = React.useState<boolean>(false);
+  const onViewPanelClick = (): void => setIsPanelOpen(true);
+  const onViewPanelDismiss = (): void => setIsPanelOpen(false);
 
   if (!extensionName || !termsetGuid) {
     return (
@@ -107,19 +97,18 @@ export const Preferences: React.FC<IPreferencesProps> = (props) => {
     );
   }
 
+  const titleFor = React.useCallback(
+    (id: string) => termsInfo.find((t) => t.id === id)?.title ?? id,
+    [termsInfo]
+  );
+
   return (
     <Container>
       <Card withBorder shadow="sm" radius="md">
         <Card.Section withBorder inheritPadding py="xs">
           <Group position="apart">
-            <h2 className={styles.sectionTitle}>
-              {title}
-            </h2>
-            <ActionIcon
-              onClick={onViewPanelClick}
-              variant="outline"
-              color="indigo"
-            >
+            <h2 className={styles.sectionTitle}>{title}</h2>
+            <ActionIcon onClick={onViewPanelClick} variant="outline" color="indigo">
               <IconSettings size="1rem" />
             </ActionIcon>
           </Group>
@@ -138,19 +127,13 @@ export const Preferences: React.FC<IPreferencesProps> = (props) => {
 
           <div className={classes.tagWrapper}>
             {tagList.length > 0 &&
-              tagList.map((t: ITerm, index) => {
-                return (
-                  <div className={classes.tag} key={index}>
-                    {t.title}
-                  </div>
-                );
-              })}
+              tagList.map((id) => (
+                <div className={classes.tag} key={id}>
+                  {titleFor(id)}
+                </div>
+              ))}
           </div>
         </Group>
-
-        {/* <Button variant="light" color="blue" fullWidth mt="md" radius="md">
-            Book classic tour now
-          </Button> */}
       </Card>
     </Container>
   );

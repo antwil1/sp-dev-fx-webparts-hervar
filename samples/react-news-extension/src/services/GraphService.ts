@@ -13,7 +13,7 @@ class GraphService {
   public static async GetExtension(extensionName: string): Promise<any> {
     try {
       const result = await this.GET(`/me/extensions/${extensionName}`);
-      return result;
+      return result; // { id, extensionName, Tags: string[] }
     } catch (error) {
       console.log("Error in GetExtension:", error);
       return null;
@@ -21,26 +21,18 @@ class GraphService {
   }
 
   public static async GetPreferences(extensionName: string): Promise<any> {
-    try {      
+    try {
       const result = await this.GET(`/me/extensions/${extensionName}`);
-      return result;
+      return result; // { Tags: string[] }
     } catch (error) {
       LogHelper.error("GraphService", "GetPreferences", `${error}`);
       return null;
     }
   }
 
-  /**
-   * Saves preferences
-   * @param userSettings
-   * @returns preferences
-   */
   public static async SavePreferences(userSettings: any): Promise<any> {
     try {
-      const result = await this.POST(
-        `/me/extensions`,
-        JSON.stringify(userSettings)
-      );
+      const result = await this.POST(`/me/extensions`, JSON.stringify(userSettings));
       return result;
     } catch (error) {
       LogHelper.error("GraphService", "SavePreferences", `${error}`);
@@ -48,20 +40,9 @@ class GraphService {
     }
   }
 
-  /**
-   * Updates preferences
-   * @param userSettings
-   * @returns preferences
-   */
-  public static async UpdatePreferences(
-    userSettings: any,
-    extensionName: string
-  ): Promise<any> {
+  public static async UpdatePreferences(userSettings: any, extensionName: string): Promise<any> {
     try {
-      const result = await this.PATCH(
-        `/me/extensions/${extensionName}`,
-        JSON.stringify(userSettings)
-      );
+      const result = await this.PATCH(`/me/extensions/${extensionName}`, JSON.stringify(userSettings));
       return result;
     } catch (error) {
       LogHelper.error("GraphService", "UpdatePreferences", `${error}`);
@@ -71,62 +52,35 @@ class GraphService {
 
   private static GET(query: string): Promise<any> {
     return new Promise<any>((resolve, reject) => {
-      this._context.msGraphClientFactory
-        .getClient("3")
-        .then((client: MSGraphClientV3): void => {
-          client.api(query).get((error, response) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve(response);
-          });
+      this._context.msGraphClientFactory.getClient("3").then((client: MSGraphClientV3): void => {
+        client.api(query).get((error, response) => {
+          if (error) { reject(error); return; }
+          resolve(response);
         });
+      });
     });
   }
+
   private static POST(query: string, content: string) {
     return new Promise<any>((resolve, reject) => {
-      this._context.msGraphClientFactory
-        .getClient("3")
-        .then((client: MSGraphClientV3): void => {
-          client.api(query).post(content, (error, response) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve(response);
-          });
+      this._context.msGraphClientFactory.getClient("3").then((client: MSGraphClientV3): void => {
+        client.api(query).post(content, (error, response) => {
+          if (error) { reject(error); return; }
+          resolve(response);
         });
+      });
     });
   }
+
   private static PATCH(query: string, content: string) {
     return new Promise<any>((resolve, reject) => {
-      this._context.msGraphClientFactory
-        .getClient("3")
-        .then((client: MSGraphClientV3): void => {
-          client.api(query).patch(content, (error, response, rawResponse) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve(rawResponse);
-          });
+      this._context.msGraphClientFactory.getClient("3").then((client: MSGraphClientV3): void => {
+        client.api(query).patch(content, (error, response, rawResponse) => {
+          if (error) { reject(error); return; }
+          resolve(rawResponse);
         });
+      });
     });
   }
-  //   private static DELETE(query: string) {
-  //     return new Promise<any>((resolve, reject) => {
-  //       this._context.msGraphClientFactory
-  //         .getClient("3")
-  //         .then((client: MSGraphClientV3): void => {
-  //           client.api(query).delete((error, response, rawResponse) => {
-  //             if (error) {
-  //               reject(error);
-  //             }
-  //             resolve(rawResponse);
-  //           });
-  //         });
-  //     });
-  //   }
 }
 export default GraphService;

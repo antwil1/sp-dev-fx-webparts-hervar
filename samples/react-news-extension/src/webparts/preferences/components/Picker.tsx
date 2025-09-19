@@ -1,17 +1,8 @@
 import * as React from "react";
 import SPService from "../../../services/SPService";
 import {
-  Chip,
-  Group,
-  Box,
-  Modal,
-  Button,
-  Flex,
-  Grid,
-  useMantineTheme,
-  ModalBaseStylesNames,
-  Styles,
-  Alert,
+  Chip, Group, Box, Modal, Button, Flex, Grid,
+  useMantineTheme, ModalBaseStylesNames, Styles, Alert,
 } from "@mantine/core";
 import GraphService from "../../../services/GraphService";
 import { ITerm } from "../types/Component.Types";
@@ -30,62 +21,24 @@ export interface IPickerProps {
 
 export const Picker: React.FC<IPickerProps> = (props) => {
   const { extensionName, termsetGuid, opened, close, loginName } = props;
-  const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
+
   const theme = useMantineTheme();
+  const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
+  // ⬇️ Endast ID:n
   const [tags, setTags] = React.useState<string[]>([]);
-  const [tagList, setTagList] = useRecoilState(tagsListAtom);
+  const [tagList, setTagList] = useRecoilState<string[]>(tagsListAtom);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [submitted, setSubmitted] = React.useState<boolean>(false);
 
-
-  // Code below is for caching termset
-
-  // const dataCacheKey = `Preferences-taxonomy-${termsetGuid}`;
-
-  // const getCachedTaxonomy = async () => {
-  //   // Check if the taxonomy data is available in the cache.
-  //   const cachedTaxonomy = await CachingService.get(dataCacheKey);
-  //   // If the taxonomy data is available in the cache, return it.
-  //   if (cachedTaxonomy) {
-  //     return cachedTaxonomy;
-  //   }
-
-  //   // Otherwise, make an API call to fetch the taxonomy data and cache it.
-  //   const taxonomy = await SPService.getAllTermsByTermSet(termsetGuid);
-  //   const termsResult = taxonomy.map((t: any) => {
-  //     const termId = t.id;
-  //     const termName = t.labels[0].name;
-  //     return { id: termId, title: termName } as ITerm;
-  //   });
-  //   // Cache the taxonomy data.
-  //   CachingService.set(dataCacheKey, termsResult);
-
-  //   // Return the taxonomy data.
-  //   return termsResult;
-  // };
-
-  // React.useEffect(() => {
-  //   async function fetchTaxonomy() {
-  //     const termsResult = await getCachedTaxonomy();
-  //     const ids = tagList.map((obj: ITerm) => obj.id);
-  //     setTags(ids);
-  //     setTermsInfo(termsResult);
-  //   }
-  //   fetchTaxonomy();
-  // }, []);
-
-  // Not caching termset
   React.useEffect(() => {
     async function fetchTaxonomy() {
       const terms = await SPService.getAllTermsByTermSet(termsetGuid);
-      const termsResult = terms.map((t: any) => {
-        const termId = t.id;
-        const termName = t.labels[0].name;
-        return { id: termId, title: termName } as ITerm;
-      });
-      const ids = tagList.map((obj: ITerm) => obj.id);
-      setTags(ids);
+      const termsResult: ITerm[] = (terms || []).map((t: any) => ({
+        id: t.id,
+        title: t.labels?.[0]?.name ?? t.name ?? t.id,
+      }));
       setTermsInfo(termsResult);
+      setTags(tagList); // atomen är redan string[]
     }
     fetchTaxonomy();
   }, []);
@@ -96,69 +49,41 @@ export const Picker: React.FC<IPickerProps> = (props) => {
 
     const extension = await GraphService.GetExtension(extensionName);
 
-    const selectedTags = [];
-    for (const guid of tags) {
-      const term = termsInfo.find((t: ITerm) => t.id === guid);
-      if (term) {
-        selectedTags.push(term);
-      }
-    }
-
+    // ⬇️ Skicka bara ID:n till Graph
     const userSettings = {
       "@odata.type": "microsoft.graph.openTypeExtension",
       extensionName: extensionName,
-      Tags: selectedTags,
+      Tags: tags as string[],
     };
+
     if (extension === null) {
-      //Create Extesion
-      const response = await GraphService.SavePreferences(userSettings);
-      if (response !== null && response.ok) {
-        console.log(response);
-      }
+      await GraphService.SavePreferences(userSettings);
     } else {
-      //update Extesion
-      const response = await GraphService.UpdatePreferences(
-        userSettings,
-        extensionName
-      );
-
-
-
-      if (response !== null) {
-        console.log(response);
-        setTagList(selectedTags);
-        setSubmitted(true);
-      }
+      await GraphService.UpdatePreferences(userSettings, extensionName);
     }
 
-    // 1) uppdatera lokalt UI
-    setTagList(selectedTags);
+    // 1) Uppdatera lokalt UI
+    setTagList(tags);
     setSubmitted(true);
 
-    // 2) rensa cache för båda webbdelsdelarna
+    // 2) Rensa cache
     CachingService.remove(`Preferences-${extensionName}-${loginName}`);
     CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
 
-    // 3) signalera till sidan att preferenser sparats
-    window.dispatchEvent(new CustomEvent('curated:preferencesSaved', {
+    // 3) Signalera
+    window.dispatchEvent(new CustomEvent("curated:preferencesSaved", {
       detail: { extensionName, loginName }
     }));
 
     setLoading(false);
   };
-  const onTagChange = (selectedTags: string[]) => {
-    const ids = [...selectedTags];
-    setTags(ids);
-    //setTags((prevState) => [...prevState, ...selectedTags]);
-  };
-  console.log(tagList);
+
+  const onTagChange = (selectedIds: string[]) => setTags([...selectedIds]);
 
   const modelHeaderStyles: Styles<ModalBaseStylesNames> = {
     header: {
       backgroundColor: "#d1d2d3ba",
-      h2: {
-        fontSize: "1.1rem",
-      },
+      h2: { fontSize: "1.1rem" },
     },
   };
 
@@ -172,29 +97,20 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         title="Uppdatera preferenser"
         centered
         overlayProps={{
-          color:
-            theme.colorScheme === "dark"
-              ? theme.colors.dark[9]
-              : theme.colors.gray[2],
+          color: theme.colorScheme === "dark" ? theme.colors.dark[9] : theme.colors.gray[2],
           opacity: 0.55,
           blur: 3,
         }}
       >
         <Grid>
           <Grid.Col span={12}>
-            {" "}
             <Chip.Group multiple value={tags} onChange={onTagChange}>
               <Group position="center" mt="md">
                 {termsInfo.length > 0 &&
-                  termsInfo.map((t: ITerm, index: number) => {
-                    const isSelected: boolean = tags.some((o) => o === t.id);
+                  termsInfo.map((t: ITerm) => {
+                    const isSelected = tags.includes(t.id);
                     return (
-                      <Chip
-                        checked={isSelected}
-                        variant="filled"
-                        key={index}
-                        value={t.id}
-                      >
+                      <Chip checked={isSelected} variant="filled" key={t.id} value={t.id}>
                         {t.title}
                       </Chip>
                     );
@@ -202,9 +118,9 @@ export const Picker: React.FC<IPickerProps> = (props) => {
               </Group>
             </Chip.Group>
           </Grid.Col>
+
           {!submitted && (
             <Grid.Col span={12}>
-              {" "}
               <Flex gap="md" justify="flex-end">
                 <Box w={200}>
                   <Button
