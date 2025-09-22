@@ -71,6 +71,7 @@ class SPService {
         "PromotedState",
         "O3CSortableTitle",
         "Title",
+        "FirstPublishedDate", // 👈 det datum vi sorterar på
         filterManagedPropertyName,
       ];
 
@@ -86,6 +87,11 @@ class SPService {
         EnableInterleaving: true,
         TrimDuplicates: false,
         SelectProperties: selectProps,
+        // Stabil sortering: senaste publicerade först, därefter modifierade
+        SortList: [
+          { Property: "RefinableDate01", Direction: 1 }, // 1 = desc
+          { Property: "LastModifiedTime", Direction: 1 },
+        ],
       });
 
       const items = (results.PrimarySearchResults || []) as unknown as ISearchResult[];
