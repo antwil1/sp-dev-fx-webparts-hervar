@@ -119,7 +119,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
     } finally {
       setLoading(false);
     }
-  }
+  };
 
 
   const modelHeaderStyles: Styles<ModalBaseStylesNames> = {
