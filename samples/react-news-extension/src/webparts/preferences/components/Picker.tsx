@@ -1,12 +1,21 @@
 import * as React from "react";
 import SPService from "../../../services/SPService";
 import {
-  Chip, Group, Box, Modal, Button, Flex, Grid,
-  useMantineTheme, ModalBaseStylesNames, Styles, Alert,
+  Chip,
+  Group,
+  Box,
+  Modal,
+  Button,
+  Flex,
+  Grid,
+  useMantineTheme,
+  ModalBaseStylesNames,
+  Styles,
+  Alert,
 } from "@mantine/core";
 import GraphService from "../../../services/GraphService";
 import { ITerm } from "../types/Component.Types";
-import { IconCheck } from "@tabler/icons-react";
+import { IconCheck, IconAlertTriangle } from "@tabler/icons-react";
 import { useRecoilState } from "recoil";
 import { tagsListAtom } from "../../../stores/appstore";
 import CachingService from "../../../services/CachingService";
@@ -22,63 +31,96 @@ export interface IPickerProps {
 export const Picker: React.FC<IPickerProps> = (props) => {
   const { extensionName, termsetGuid, opened, close, loginName } = props;
 
-  const theme = useMantineTheme();
+  // Alla termer (för visning av namn)
   const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
-  // ⬇️ Endast ID:n
+
+  // Valda taggar = lista av GUID (string[])
   const [tags, setTags] = React.useState<string[]>([]);
-  const [tagList, setTagList] = useRecoilState<string[]>(tagsListAtom);
+
+  // Global state (ska vara string[] med ID:n)
+  const [tagList, setTagList] = useRecoilState(tagsListAtom);
+
+  const theme = useMantineTheme();
   const [loading, setLoading] = React.useState<boolean>(false);
   const [submitted, setSubmitted] = React.useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = React.useState<string>("");
 
+  // Hämta alla termer + initiera valda taggar från global state
   React.useEffect(() => {
     async function fetchTaxonomy() {
       const terms = await SPService.getAllTermsByTermSet(termsetGuid);
       const termsResult: ITerm[] = (terms || []).map((t: any) => ({
         id: t.id,
-        title: t.labels?.[0]?.name ?? t.name ?? t.id,
+        title: t.labels?.[0]?.name ?? "",
       }));
       setTermsInfo(termsResult);
-      setTags(tagList); // atomen är redan string[]
+
+      // tagList ska vara string[]
+      setTags(Array.isArray(tagList) ? tagList : []);
     }
     fetchTaxonomy();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termsetGuid]);
 
+  // Hantera val i Chip.Group (vi får IDs direkt)
+  const onTagChange = (selectedIds: string[]) => {
+    setTags(selectedIds);
+  };
+
+  // Spara endast ID:n i Open Extension
   const onSavePreferences = async () => {
     setLoading(true);
     setSubmitted(false);
+    setErrorMsg("");
 
-    const extension = await GraphService.GetExtension(extensionName);
+    try {
+      const extension = await GraphService.GetExtension(extensionName);
 
-    // ⬇️ Skicka bara ID:n till Graph
-    const userSettings = {
-      "@odata.type": "microsoft.graph.openTypeExtension",
-      extensionName: extensionName,
-      Tags: tags as string[],
-    };
+      const userSettings = {
+        "@odata.type": "microsoft.graph.openTypeExtension",
+        extensionName,
+        Tags: tags, // endast ID:n
+      };
 
-    if (extension === null) {
-      await GraphService.SavePreferences(userSettings);
-    } else {
-      await GraphService.UpdatePreferences(userSettings, extensionName);
+      if (extension === null) {
+        await GraphService.SavePreferences(userSettings);        // kastar vid fel
+      } else {
+        await GraphService.UpdatePreferences(userSettings, extensionName); // kastar vid fel (även 413)
+      }
+
+      // ✅ Lyckat
+      setTagList(tags);
+      CachingService.remove(`Preferences-${extensionName}-${loginName}`);
+      CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
+      window.dispatchEvent(new CustomEvent("curated:preferencesSaved", { detail: { extensionName, loginName } }));
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error("onSavePreferences error:", err);
+
+      const status = err?.statusCode ?? err?.status;
+      const rawMsg = (err?.message || "").toString().toLowerCase();
+
+      let message = "Kunde inte spara dina inställningar.";
+
+      // Grafens 2 KB-gräns – mappa till ett begripligt fel
+      if (status === 413 || rawMsg.includes("maximum size supported for each extension is")) {
+        message = "Du har valt för många taggar. Välj färre taggar och försök igen.";
+      } else if (status === 401 || status === 403) {
+        message = "Du har inte behörighet att spara dessa inställningar. Kontakta IT-avdelningen.";
+      } else if (status === 404) {
+        message = "Inställningslagringen kunde inte hittas. Kontrollera att extension-namnet är korrekt i webbdelens inställningar.";
+      } else if (status >= 500) {
+        message = "Det uppstod ett tillfälligt problem hos Microsoft Graph. Försök igen om en stund.";
+      } else if (typeof err?.message === "string") {
+        message = err.message;
+      }
+
+      setErrorMsg(message);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    // 1) Uppdatera lokalt UI
-    setTagList(tags);
-    setSubmitted(true);
-
-    // 2) Rensa cache
-    CachingService.remove(`Preferences-${extensionName}-${loginName}`);
-    CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
-
-    // 3) Signalera
-    window.dispatchEvent(new CustomEvent("curated:preferencesSaved", {
-      detail: { extensionName, loginName }
-    }));
-
-    setLoading(false);
-  };
-
-  const onTagChange = (selectedIds: string[]) => setTags([...selectedIds]);
 
   const modelHeaderStyles: Styles<ModalBaseStylesNames> = {
     header: {
@@ -97,7 +139,10 @@ export const Picker: React.FC<IPickerProps> = (props) => {
         title="Uppdatera preferenser"
         centered
         overlayProps={{
-          color: theme.colorScheme === "dark" ? theme.colors.dark[9] : theme.colors.gray[2],
+          color:
+            theme.colorScheme === "dark"
+              ? theme.colors.dark[9]
+              : theme.colors.gray[2],
           opacity: 0.55,
           blur: 3,
         }}
@@ -110,7 +155,12 @@ export const Picker: React.FC<IPickerProps> = (props) => {
                   termsInfo.map((t: ITerm) => {
                     const isSelected = tags.includes(t.id);
                     return (
-                      <Chip checked={isSelected} variant="filled" key={t.id} value={t.id}>
+                      <Chip
+                        key={t.id}
+                        value={t.id}
+                        checked={isSelected}
+                        variant="filled"
+                      >
                         {t.title}
                       </Chip>
                     );
@@ -118,6 +168,36 @@ export const Picker: React.FC<IPickerProps> = (props) => {
               </Group>
             </Chip.Group>
           </Grid.Col>
+
+          {/* FEL – röd, stängbar, ingen auto-close */}
+          {errorMsg && (
+            <Grid.Col span={12}>
+              <Alert
+                icon={<IconAlertTriangle size="1rem" />}
+                title="Kunde inte spara"
+                color="red"
+                withCloseButton
+                onClose={() => setErrorMsg("")}
+              >
+                {errorMsg}
+              </Alert>
+            </Grid.Col>
+          )}
+
+          {/* OK – grön, stängbar, ingen auto-close */}
+          {submitted && !errorMsg && (
+            <Grid.Col span={12}>
+              <Alert
+                icon={<IconCheck size="1rem" />}
+                title="Klart!"
+                color="green"
+                withCloseButton
+                onClose={() => setSubmitted(false)}
+              >
+                Dina inställningar har sparats.
+              </Alert>
+            </Grid.Col>
+          )}
 
           {!submitted && (
             <Grid.Col span={12}>
@@ -137,18 +217,6 @@ export const Picker: React.FC<IPickerProps> = (props) => {
             </Grid.Col>
           )}
         </Grid>
-
-        {submitted && (
-          <Alert
-            icon={<IconCheck size="1rem" />}
-            title="Klart!"
-            color="green"
-            withCloseButton
-            onClose={() => setSubmitted(false)}
-          >
-            Dina inställningar har sparats. Allt är redo!
-          </Alert>
-        )}
       </Modal>
     </div>
   );
