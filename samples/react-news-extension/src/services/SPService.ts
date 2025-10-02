@@ -89,7 +89,7 @@ class SPService {
         SelectProperties: selectProps,
         // Stabil sortering: senaste publicerade först, därefter modifierade
         SortList: [
-          { Property: "RefinableDate01", Direction: 1 }, // 1 = desc
+          { Property: "RefinableDate00", Direction: 1 }, // 1 = desc
           { Property: "LastModifiedTime", Direction: 1 },
         ],
       });

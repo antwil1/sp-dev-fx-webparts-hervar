@@ -38,7 +38,7 @@ export const Picker: React.FC<IPickerProps> = (props) => {
   const [tags, setTags] = React.useState<string[]>([]);
 
   // Global state (ska vara string[] med ID:n)
-  const [tagList, setTagList] = useRecoilState(tagsListAtom);
+  const [tagList, setTagList] = useRecoilState<string[]>(tagsListAtom as any);
 
   const theme = useMantineTheme();
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -67,60 +67,90 @@ export const Picker: React.FC<IPickerProps> = (props) => {
     setTags(selectedIds);
   };
 
-  // Spara endast ID:n i Open Extension
+  // Normalisera Graph-fel (statuskod & text)
+  const getErrorInfo = (err: any) => {
+    const status =
+      err?.statusCode ??
+      err?.status ??
+      err?.responseStatus ??
+      err?.code === "ResourceNotFound"
+        ? 404
+        : undefined;
+    const message = (err?.message || "").toString();
+    return { status, message: message.toLowerCase() };
+  };
+
+  // Spara endast ID:n i Open Extension (försök PATCH, om 404 → POST)
   const onSavePreferences = async () => {
     setLoading(true);
     setSubmitted(false);
     setErrorMsg("");
 
+    const payload = {
+      "@odata.type": "microsoft.graph.openTypeExtension",
+      extensionName,
+      Tags: tags, // endast ID:n
+    };
+
     try {
-      const extension = await GraphService.GetExtension(extensionName);
+      // 1) Försök hämta extension
+      let exists = false;
+      try {
+        const ext = await GraphService.GetExtension(extensionName);
+        exists = !!ext; // finns => PATCH
+      } catch (getErr: any) {
+        const { status } = getErrorInfo(getErr);
+        if (status === 404) {
+          exists = false; // skapa nytt med POST
+        } else {
+          throw getErr; // andra fel → hanteras nedan
+        }
+      }
 
-      const userSettings = {
-        "@odata.type": "microsoft.graph.openTypeExtension",
-        extensionName,
-        Tags: tags, // endast ID:n
-      };
-
-      if (extension === null) {
-        await GraphService.SavePreferences(userSettings);        // kastar vid fel
+      // 2) PATCH om det finns, annars POST
+      if (exists) {
+        await GraphService.UpdatePreferences(payload, extensionName);
       } else {
-        await GraphService.UpdatePreferences(userSettings, extensionName); // kastar vid fel (även 413)
+        await GraphService.SavePreferences(payload);
       }
 
       // ✅ Lyckat
       setTagList(tags);
       CachingService.remove(`Preferences-${extensionName}-${loginName}`);
       CachingService.remove(`CuratedNews-UserPreferences-${loginName}`);
-      window.dispatchEvent(new CustomEvent("curated:preferencesSaved", { detail: { extensionName, loginName } }));
+      window.dispatchEvent(
+        new CustomEvent("curated:preferencesSaved", {
+          detail: { extensionName, loginName },
+        })
+      );
       setSubmitted(true);
     } catch (err: any) {
       console.error("onSavePreferences error:", err);
 
-      const status = err?.statusCode ?? err?.status;
-      const rawMsg = (err?.message || "").toString().toLowerCase();
+      const { status, message } = getErrorInfo(err);
+      let uiMsg = "Kunde inte spara dina inställningar.";
 
-      let message = "Kunde inte spara dina inställningar.";
-
-      // Grafens 2 KB-gräns – mappa till ett begripligt fel
-      if (status === 413 || rawMsg.includes("maximum size supported for each extension is")) {
-        message = "Du har valt för många taggar. Välj färre taggar och försök igen.";
+      if (status === 413 || message.includes("maximum size supported for each extension is")) {
+        uiMsg =
+          "Du har valt för många taggar. Välj färre taggar och försök igen (Microsoft Graph har en 2 KB-gräns per extension).";
       } else if (status === 401 || status === 403) {
-        message = "Du har inte behörighet att spara dessa inställningar. Kontakta IT-avdelningen.";
+        uiMsg =
+          "Du har inte behörighet att spara dessa inställningar. Kontakta IT-avdelningen.";
       } else if (status === 404) {
-        message = "Inställningslagringen kunde inte hittas. Kontrollera att extension-namnet är korrekt i webbdelens inställningar.";
-      } else if (status >= 500) {
-        message = "Det uppstod ett tillfälligt problem hos Microsoft Graph. Försök igen om en stund.";
-      } else if (typeof err?.message === "string") {
-        message = err.message;
+        uiMsg =
+          "Inställningslagringen kunde inte hittas och kunde inte skapas. Kontrollera att extension-namnet är korrekt.";
+      } else if (status && status >= 500) {
+        uiMsg =
+          "Det uppstod ett tillfälligt problem hos Microsoft Graph. Försök igen om en stund.";
+      } else if (err?.message) {
+        uiMsg = err.message;
       }
 
-      setErrorMsg(message);
+      setErrorMsg(uiMsg);
     } finally {
       setLoading(false);
     }
   };
-
 
   const modelHeaderStyles: Styles<ModalBaseStylesNames> = {
     header: {
