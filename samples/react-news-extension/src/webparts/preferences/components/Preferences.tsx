@@ -9,7 +9,6 @@ import SPService from "../../../services/SPService";
 import { ITerm } from "../types/Component.Types";
 import { useRecoilState } from "recoil";
 import { tagsListAtom } from "../../../stores/appstore";
-import CachingService from "../../../services/CachingService";
 import { Placeholder } from "@pnp/spfx-controls-react/lib/Placeholder";
 
 const useStyles = createStyles(() => ({
@@ -37,7 +36,7 @@ const useStyles = createStyles(() => ({
 }));
 
 export const Preferences: React.FC<IPreferencesProps> = (props) => {
-  const { extensionName, termsetGuid, loginName, title, context, enableCaching } = props;
+  const { extensionName, termsetGuid, loginName, title, context } = props;
   const { classes } = useStyles();
 
   // ⬇️ Nu är listan string[] (bara ID:n)
@@ -46,40 +45,33 @@ export const Preferences: React.FC<IPreferencesProps> = (props) => {
   // För att slå upp titlar för visning
   const [termsInfo, setTermsInfo] = React.useState<ITerm[]>([]);
 
-  const dataCacheKey = `Preferences-${extensionName}-${loginName}`;
-  const termsCacheKey = `Preferences-taxonomy-${termsetGuid}`;
-
   const onConfigure = () => context.propertyPane.open();
 
+  // Hämta taxonomi varje gång
   const loadTerms = React.useCallback(async () => {
-    const cached = CachingService.get<ITerm[]>(termsCacheKey);
-    if (cached) { setTermsInfo(cached); return; }
     const terms = await SPService.getAllTermsByTermSet(termsetGuid);
     const mapped: ITerm[] = (terms || []).map((t: any) => ({
       id: t.id,
       title: t.labels?.[0]?.name ?? t.name ?? t.id,
     }));
     setTermsInfo(mapped);
-    CachingService.set(termsCacheKey, mapped);
-  }, [termsetGuid, termsCacheKey]);
+  }, [termsetGuid]);
 
+  // Hämta användarpreferenser från Graph varje gång
   const getUserPreferences = async (): Promise<string[]> => {
-    const cachedData = CachingService.get<string[]>(dataCacheKey);
-    if (cachedData !== null) return cachedData;
-
     const result = await GraphService.GetPreferences(extensionName);
-    const ids: string[] = (result && Array.isArray(result.Tags)) ? result.Tags : [];
-    if (enableCaching) CachingService.set(dataCacheKey, ids);
-    return ids;
+    return result && Array.isArray(result.Tags) ? result.Tags : [];
   };
 
-  const getPreferences = React.useCallback(async () => getUserPreferences(), []);
-
-  React.useEffect(() => { loadTerms(); }, [loadTerms]);
+  React.useEffect(() => {
+    loadTerms();
+  }, [loadTerms]);
 
   React.useEffect(() => {
-    getPreferences().then((ids) => setTagList(ids)).catch(console.log);
-  }, [getPreferences]);
+    getUserPreferences()
+      .then((ids) => setTagList(ids))
+      .catch(console.error);
+  }, [extensionName]);
 
   const [isPanelOpen, setIsPanelOpen] = React.useState<boolean>(false);
   const onViewPanelClick = (): void => setIsPanelOpen(true);
